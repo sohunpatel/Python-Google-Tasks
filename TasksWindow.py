@@ -12,7 +12,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-SCOPES = ['https://www.googleapis.com/auth/tasks.readonly']
+SCOPES = ['https://www.googleapis.com/auth/tasks']
 
 
 def on_button_clicked():
@@ -53,19 +53,71 @@ class TasksWindow(Gtk.Window):
 
     def __init__(self):
         super().__init__(title="Tasks")
-        service = start_tasks_api()
-        tasklists = get_tasklists(service)
-
+        self.service = start_tasks_api()
+        self.tasklists = get_tasklists(self.service)
         self.notebook = Gtk.Notebook()
-        self.add(self.notebook)
+        self.pages = []
+        self.refresh()
 
-        for tasklist in tasklists:
-            self.page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-            self.page.set_border_width(10)
-            tasks = get_tasks(service, tasklist['id'])
+    def refresh(self):
+        self.tasklists = get_tasklists(self.service)
+
+        for tasklist in self.tasklists:
+            page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+            page.set_border_width(10)
+            tasks = get_tasks(self.service, tasklist['id'])
             if tasks is not None:
                 for task in tasks:
                     if task is None:
                         break
-                    self.page.add(Gtk.Label(label=task['title']))
-            self.notebook.append_page(self.page, Gtk.Label(label=tasklist['title']))
+                    page.add(TaskBox(task))
+            add_button = Gtk.Button(label="+")
+            add_button.connect("clicked", self.new_task)
+            page.add(add_button)
+            self.pages.append(page)
+            self.notebook.append_page(page, Gtk.Label(label=tasklist['title']))
+
+    def new_task(self, button):
+        # i = self.notebook.get_current_page()
+        # task = dict()
+        # self.service.tasks().insert(tasklist=self.tasklists[i]['id'], body=task)
+        self.refresh()
+
+
+class TasklistPage(Gtk.Box):
+
+    def __init__(self, service, tasklist):
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
+        self.set_border_width(10)
+
+        self.service = service
+        self.tasklist = tasklist
+        self.tasks = get_tasks(self.service, self.tasklist)
+
+        for task in self.tasks:
+            if task is None:
+                break
+            self.add(TaskBox(task))
+
+        self.add_button = Gtk.Button(label="+")
+        self.add_button.connect("clicked", self.new_task)
+
+    def new_task(self, button):
+        i = 0
+
+
+class TaskBox(Gtk.HBox):
+
+    def __init__(self, task):
+        super(TaskBox, self).__init__()
+        self.task = task
+        self.label = Gtk.Label(label=task['title'])
+        self.pack_start(self.label, False, False, 30)
+        self.completed = Gtk.CheckButton()
+        self.pack_end(self.completed, False, False, 30)
+
+    def get_status(self) -> bool:
+        return self.completed.get_active()
+
+    def set_status(self, status: bool) -> None:
+        self.completed.set_active(status)
